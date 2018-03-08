@@ -8,14 +8,16 @@ all_features = ['assist', 'bad pass', 'block', 'defensive foul',
        'offensive rebound', 'score', 'steals', 'three pts',
        'total rebound', 'two pts']
 
-def add_tot_rebounds(df):
+def add_incremental_features(df):
     """
-    Compute total rebounds stats over the game
+    Compute total rebounds, turnovers, FGA stats over the game
     :param df: dataframe
     :return: dataframe with new column
     """
     for k in range(1,1441):
         df['total rebound_%d' % k] = df['offensive rebound_%d' % k] + df['defensive rebound_%d' % k]
+        df['turnover_%d' % k] = df['bad_pass_%d' % k] + df['lost_ball_%d' % k] + df['offensive_foul_%d' % k]
+        df['fga_%d' % k] = df['fg_%d' % k] + df['miss_%d' % k] + df['block_%d' % k]
     return df
 
 def convert_pt(x, nb):
