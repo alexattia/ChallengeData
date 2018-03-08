@@ -3,6 +3,11 @@ import numpy as np
 import itertools
 from tqdm import tqdm
 
+all_features = ['assist', 'bad pass', 'block', 'defensive foul',
+       'defensive rebound', 'fg', 'lost ball', 'miss', 'offensive foul',
+       'offensive rebound', 'score', 'steals', 'three pts',
+       'total rebound', 'two pts']
+
 def add_tot_rebounds(df):
     """
     Compute total rebounds stats over the game
@@ -56,3 +61,10 @@ def add_fg(df, test=False):
         keep = ['ID', 'label']
     return df[keep + sorted([k for k in df.columns if len(k.split('_')) > 1 and 'diff ' not in k], 
                                        key=lambda x:int(x.split('_')[1]))]
+
+def add_features_24(df):
+    for var in all_features:
+        temp = df[[k for k in df.columns if var in k and int(k.split('_')[1]) % 24 == 0]].diff(axis=1)
+        temp.columns = [k + '_up' for k in temp.columns]
+        df = pd.concat([df, temp], axis=1)
+    return df
