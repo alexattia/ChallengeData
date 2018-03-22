@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import itertools
 from tqdm import tqdm
+import gc
 
 all_features = ['assist', 'bad pass', 'block', 'defensive foul',
        'defensive rebound', 'fg', 'lost ball', 'miss', 'offensive foul',
@@ -14,9 +15,9 @@ def add_incremental_features(df):
     :param df: dataframe
     :return: dataframe with new column
     """
-    for k in range(1,1441):
+    for k in tqdm(range(1,1441)):
         df['total rebound_%d' % k] = df['offensive rebound_%d' % k] + df['defensive rebound_%d' % k]
-        df['turnover_%d' % k] = df['bad_pass_%d' % k] + df['lost_ball_%d' % k] + df['offensive_foul_%d' % k]
+        df['turnover_%d' % k] = df['bad pass_%d' % k] + df['lost ball_%d' % k] + df['offensive foul_%d' % k]
         df['fga_%d' % k] = df['fg_%d' % k] + df['miss_%d' % k] + df['block_%d' % k]
     return df
 
@@ -64,9 +65,42 @@ def add_fg(df, test=False):
     return df[keep + sorted([k for k in df.columns if len(k.split('_')) > 1 and 'diff ' not in k], 
                                        key=lambda x:int(x.split('_')[1]))]
 
+def compute_absolute(df):
+    ki = ['score', 'assist', 'fg', 'fga', 'three pts', 'turnover']
+    scores = df[[k for k in df.columns if any(p in k for p in ki) and 'up' not in k]]
+    for var in ki:
+        temp_away, temp_home = np.zeros((len(scores), 1440)), np.zeros((len(scores), 1440))
+        for k in range(1,1441):
+            if k > 1:
+                diff = (scores['%s_%d' % (var, k)] - scores['%s_%d' % (var, k-1)]).values
+            else:
+                diff = scores['%s_%d' % (var, k)].values
+            temp_away[np.flatnonzero(diff>0), k-1] = diff[np.flatnonzero(diff>0)]
+            temp_home[np.flatnonzero(diff<0), k-1] = diff[np.flatnonzero(diff<0)]
+        df['%s_away_final' % var] = temp_away.sum(axis=1)
+        df['%s_home_final' % var] = np.abs(temp_home.sum(axis=1))
+    temp = len(df)
+    # filter aberrant data
+    df = df[df['score_away_final'] >= 19]
+    df = df[df['score_home_final'] >= 19]
+    print('%d samples have been removed - weird number of points' % (temp-len(df)))
+    return df
+
+def compute_advanced_stats(df):
+    teams = ['home', 'away']
+    for team in teams:
+        df['assist_turnover_%s' % team] = df['assist_%s_final' % team] / df['turnover_%s_final' % team]
+        df['assist_ratio_%s' % team] = df['assist_%s_final' % team] / (df['fga_%s_final' % team] + df['assist_%s_final' % team] + df['turnover_%s_final' % team])
+        df['fg_percentage_%s' % team] = df['fg_%s_final' % team] / df['fga_%s_final' % team]
+        df['effective_fg_%s' % team] = (df['fg_%s_final' % team] + 0.5*df['three pts_%s_final' % team]) / df['fga_%s_final' % team]
+    return df
+
 def add_features_24(df):
-    for var in all_features:
+    for var in tqdm(all_features):
         temp = df[[k for k in df.columns if var in k and int(k.split('_')[1]) % 24 == 0]].diff(axis=1)
         temp.columns = [k + '_up' for k in temp.columns]
+        temp = temp[temp.columns[1:]]
         df = pd.concat([df, temp], axis=1)
+        del temp
+        gc.collect()
     return df
